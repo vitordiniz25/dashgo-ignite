@@ -1,3 +1,5 @@
+import { useUsers } from "../../services/hooks/useUsers";
+
 import {
   Box,
   Button,
@@ -14,34 +16,55 @@ import {
   Text,
   useBreakpointValue,
   Spinner,
+  Link,
 } from "@chakra-ui/react";
-import Link from "next/link";
-import { RiAddLine } from "react-icons/ri";
 import { Header } from "../../components/Header";
-import { Pagination } from "../../components/Pagination";
 import { Sidebar } from "../../components/Sidebar";
-import { useUsers } from "../../services/hooks/useUsers";
+import { RiAddLine } from "react-icons/ri";
 
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-};
+import { Pagination } from "../../components/Pagination";
+
+import NextLink from "next/link";
+import { useState } from "react";
+import { queryClient } from "../../services/queryClient";
+import { api } from "../../services/api";
+
+import { GetServerSideProps } from "next";
+import { getUsers } from "../../services/hooks/useUsers";
 
 export default function UserList() {
-  const { data, isLoading, isFetching, error } = useUsers();
+  const [page, setPage] = useState(1);
+
+  // data = os dados que minha requisição vai retornar,
+  // isLoading = retorna se minha aplicação está em processo de carregamento ou não
+  // error = se minha aplicação está retornando um erro ou não
+  const { data, isLoading, isFetching, error } = useUsers(page);
 
   const isWideVersion = useBreakpointValue({
+    // por padrão, não está na WideVersion
     base: false,
     lg: true,
   });
+
+  async function handlePrefetchUser(userId: string) {
+    await queryClient.prefetchQuery(
+      ["user", userId],
+      async () => {
+        const response = await api.get(`users/${userId}`);
+
+        return response.data;
+      },
+      {
+        staleTime: 1000 * 60 * 10,
+      }
+    );
+  }
 
   return (
     <Box>
       <Header />
 
-      <Flex w="100%" my="6" maxWidth={1480} mx="auto" px={["4", "4", "6"]}>
+      <Flex w="100%" my="6" maxWidth={1480} mx="auto" px="6">
         <Sidebar />
 
         <Box flex="1" borderRadius={8} bg="gray.800" p="8">
@@ -53,7 +76,7 @@ export default function UserList() {
               )}
             </Heading>
 
-            <Link href="/users/create" passHref>
+            <NextLink href="/users/create" passHref>
               <Button
                 as="a"
                 size="sm"
@@ -61,13 +84,13 @@ export default function UserList() {
                 colorScheme="pink"
                 leftIcon={<Icon as={RiAddLine} fontSize="20" />}
               >
-                Criar novo usuário
+                Criar novo
               </Button>
-            </Link>
+            </NextLink>
           </Flex>
 
           {isLoading ? (
-            <Flex justify="center">
+            <Flex justify="center" align="center">
               <Spinner />
             </Flex>
           ) : error ? (
@@ -79,37 +102,48 @@ export default function UserList() {
               <Table colorScheme="whiteAlpha">
                 <Thead>
                   <Tr>
-                    <Th px={["4", "4", "6"]} color="gray.300" width="8">
+                    <Th px={["4", "4", "6"]} color="gray.300" w="8">
                       <Checkbox colorScheme="pink" />
                     </Th>
-                    <Th>Usuário</Th>
-                    {isWideVersion && <Th>Data de Cadastro</Th>}
-                    <Th width="8"></Th>
+
+                    <Th>Usuários</Th>
+                    {isWideVersion && <Th>Data de cadastro</Th>}
+                    <Th w="8"></Th>
                   </Tr>
                 </Thead>
+
                 <Tbody>
-                  {data.users.map((user: User) => {
-                    return (
-                      <Tr key={user.id}>
-                        <Td px={["4", "4", "6"]}>
-                          <Checkbox colorScheme="pink" />
-                        </Td>
-                        <Td>
-                          <Box>
+                  {data.users.map((user) => (
+                    <Tr key={user.id}>
+                      <Td px={["4", "4", "6"]}>
+                        <Checkbox colorScheme="pink" />
+                      </Td>
+
+                      <Td>
+                        <Box>
+                          <Link
+                            color="purple.400"
+                            onMouseEnter={() => handlePrefetchUser(user.id)}
+                          >
                             <Text fontWeight="bold">{user.name}</Text>
-                            <Text fontSize="sm" color="gray.300">
-                              {user.email}
-                            </Text>
-                          </Box>
-                        </Td>
-                        {isWideVersion && <Td>{user.createdAt}</Td>}
-                      </Tr>
-                    );
-                  })}
+                          </Link>
+                          <Text fontSize="sm" color="gray.300">
+                            {user.email}
+                          </Text>
+                        </Box>
+                      </Td>
+
+                      {isWideVersion && <Td>{user.createdAt}</Td>}
+                    </Tr>
+                  ))}
                 </Tbody>
               </Table>
 
-              <Pagination />
+              <Pagination
+                totalCountOfRegisters={data.totalCount}
+                currentPage={page}
+                onPageChange={setPage}
+              />
             </>
           )}
         </Box>
